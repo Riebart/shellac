@@ -2,11 +2,13 @@
 
 import sys
 import os
+import subprocess
 import string
 import urlparse
 import shutil
 import cgi
 import BaseHTTPServer
+
 try:
   import simplejson as json
 except ImportError:
@@ -79,31 +81,32 @@ class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
       return
 
     # Get the command to run. Will be interpreted by sh -c.
+    shell = "/bin/sh"
 
-    argv = ["/bin/sh","-c",action_config['command']]
+    argv = [ shell, "-c", action_config['command'] ]
 
     # Fork and execute the command.
     # In the child process, set up SHELLAC_* environmental vars for POST data.
     # TODO should we forkpty()? Harder for users to debug.
     # TODO should we block and waitpid() now, or try to reap processes later?
 
-    # (pid,fd) = os.forkpty()
-    pid = os.fork()
-
-    if pid == 0:
-      for key,value in data.items():
-        key = key.replace(string.whitespace,"")
-        key = key.replace(".","_").upper()
-        key = "SHELLAC_%s" % key
-        key = key.encode('utf8','ignore')
-        value = value.encode('utf8','ignore')
-        os.environ[key] = value
-      os.execv(argv[0],argv)
-    else:
-      os.waitpid(pid,0)
+    for key,value in data.items():
+      key = key.replace(string.whitespace,"")
+      key = key.replace(".","_").upper()
+      key = "SHELLAC_%s" % key
+      key = key.encode('utf8','ignore')
+      value = value.encode('utf8','ignore')
+      os.environ[key] = value
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    p.wait()
+    out, err = p.communicate()
 
     self.send_response(200)
-
+    if len(out) > 0 and 'return' in action_config and action_config['return'] == True:
+      self.send_header('Content-Type', 'text/html')
+      self.send_header("Content-Length", len(out))
+      self.end_headers()
+      self.wfile.write(out)
 
 def main( argv ):
 

@@ -55,10 +55,32 @@
       "contexts": ["image"]
     },
     {
+      "name": "gpg_clearsign",
+      "title": "Clearsign with gpg",
+      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | gpg.exe --clearsign --batch --passphrase \"SuperSecretPassword\" --default-key \"John Doe <john.doe@example.com>\" | clip",
+      "contexts": ["selection"],
+      "return": false
+    },
+    {
+      "name": "gpg_verify",
+      "title": "Verify with gpg",
+      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | gpg.exe",
+      "contexts": ["selection"],
+      "return": true
+    },
+    {
+      "name": "word_count",
+      "title": "Word count",
+      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | wc -w",
+      "contexts": ["selection"],
+      "return": true
+    },
+    {
       "name": "env",
       "title": "Debugging: dump environment",
       "command": "scripts/dump_env",
-      "contexts": ["all"]
+      "contexts": ["all"],
+      "return": true
     }
   ]
 }

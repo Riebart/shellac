@@ -160,7 +160,17 @@ function ajax( uri, data, opts )
     }
   };
 
-  $.ajax($.extend({},defaults,opts));
+  var return_opt = {};
+  if (uri === "/action/")
+  {
+    return_opt = {
+      complete: function(xhr,status) {
+        if (!(xhr.responseText === "")) {alert(xhr.responseText); }
+      }
+    };
+  }
+
+  $.ajax($.extend({}, defaults, opts, return_opt));
 }
 
 
