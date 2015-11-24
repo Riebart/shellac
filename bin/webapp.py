@@ -10,38 +10,48 @@ import cgi
 import BaseHTTPServer
 import urllib
 import base64
+import random
 
 try:
   import simplejson as json
 except ImportError:
   import json
 
+config_file = 'etc/shellac.json'
 
 class Model:
 
   def __init__(self):
+    self.new_names = []
+    self.actions = None
     self.load()
 
   def load(self):
-    self.config = json.loads(file('etc/shellac.json').read())
+    self.config = json.loads(file(config_file).read())
+
+    while len(self.new_names) < len(self.config['actions']):
+      self.new_names.append("".join([ chr(random.randint(ord('a'), ord('z'))) for i in range(16) ]))
+      self.new_names = list(set(self.new_names))
+
+    if len(self.new_names) > len(self.config['actions']):
+      self.new_names = self.new_names[:len(self.config['actions'])]
+
+    self.actions = dict(zip(self.new_names, self.config['actions']))
+    return self.actions
 
 model = Model()
-
 
 class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
 
   def do_GET(self):
-
     if self.path == '/config/':
-      f = file('etc/shellac.json')
-      st = os.fstat(f.fileno())
+      actions = model.load()
+      obfuscated_actions = json.dumps({'actions': {k: {'name': k, 'title': v['title'], 'contexts': v['contexts']} for k, v in actions.iteritems() }})
       self.send_response(200)
       self.send_header('Content-Type', 'application/json')
-      self.send_header("Content-Length", str(st[6]))
-      self.send_header("Last-Modified", self.date_time_string(st.st_mtime))
+      self.send_header("Content-Length", str(len(obfuscated_actions)))
       self.end_headers()
-      shutil.copyfileobj(f, self.wfile)
-      f.close()
+      self.wfile.write(obfuscated_actions)
     else:
       self.send_error(404)
 
@@ -73,9 +83,8 @@ class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
 
     # Validate that action is in the config.
 
-    model.load()
+    actions = model.load()
     action = data.get('action','')
-    actions = dict(map(lambda x: (x['name'],x), model.config['actions']))
     action_config = actions.get(action,'')
 
     if action_config == '':
@@ -84,13 +93,9 @@ class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
 
     # Get the command to run. Will be interpreted by sh -c.
     shell = "/bin/sh"
-
     argv = [ shell, "-c", action_config['command'] ]
 
-    # Fork and execute the command.
-    # In the child process, set up SHELLAC_* environmental vars for POST data.
-    # TODO should we forkpty()? Harder for users to debug.
-    # TODO should we block and waitpid() now, or try to reap processes later?
+    utf8_vals = {}
 
     for key,value in data.items():
       key = key.replace(string.whitespace,"")
@@ -101,33 +106,36 @@ class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
       # The selection is handled separately, so decode that from b64, then URI
       # decode it again.
       if key == "SHELLAC_INFO_SELECTIONTEXT":
-        print "BEFORE\n" + value
         value = base64.b64decode(value)
         value = json.loads(value)
         value = map((lambda v: urllib.unquote(v)), value)
         value = "\n".join(value)
-        print "AFTER\n" + value
+        value = value.encode("utf-8", "ignore")
+        print value
       else:
-        value = value.encode('utf8','ignore')
+        value = value.encode("utf-8", "ignore")
 
-      os.environ[key] = value.encode("utf-8", "ignore")
+      # Note that putenv() doesn't support utf-8 on some platforms, so we need
+      # to protect it there.
+      os.environ[key] = value.decode("ascii", "ignore")
+      # Also store the non-ASCII-decoded strings, for use with stdin piping
+      utf8_vals[key] = value
 
     # For each variable listed in the 'stdin' config param, take their values
     # and concatenate them in order to be fed into the stdin of the process.
     if 'stdin' in action_config:
       stdin_text = ""
       for v in action_config['stdin']:
-        stdin_text += os.environ[v]
+        stdin_text += utf8_vals[v]
 
       print "STDIN: " + stdin_text
-      p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-      p.stdin.write(input=stdin_text)
-      p.stdin.close()
+      p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+      p.stdin.write(stdin_text)
     else:
       p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    p.wait()
     out, err = p.communicate()
+    p.wait()
 
     self.send_response(200)
     if len(out) > 0 and 'return' in action_config and action_config['return'] == True:
@@ -141,7 +149,7 @@ def main( argv ):
 
   prog = argv.pop(0)
   host = '127.0.0.1'
-  port = 8000
+  port = 8783
 
   if len(argv) >= 2:
     host, port = (argv.pop(0), int(argv.pop(0)))

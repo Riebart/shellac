@@ -57,29 +57,33 @@
     {
       "name": "gpg_clearsign",
       "title": "Clearsign with gpg",
-      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | gpg.exe --clearsign --batch --passphrase \"testing123\" --default-key \"Michael Himbeault (Burner key for testing) <mike.himbeault@gmail.com>\" | clip",
+      "command": "gpg.exe --clearsign --batch --passphrase \"testing123\" --default-key \"Michael Himbeault (Burner key for testing) <mike.himbeault@gmail.com>\" | clip",
       "contexts": ["selection"],
+      "stdin": [ "SHELLAC_INFO_SELECTIONTEXT" ],
       "return": false
     },
     {
       "name": "gpg_verify",
       "title": "Verify with gpg",
-      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | gpg.exe",
+      "command": "gpg.exe",
       "contexts": ["selection"],
+      "stdin": [ "SHELLAC_INFO_SELECTIONTEXT" ],
       "return": true
     },
     {
       "name": "word_count",
       "title": "Word count",
-      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | wc -w",
+      "command": "wc -w",
       "contexts": ["selection"],
+      "stdin": [ "SHELLAC_INFO_SELECTIONTEXT" ],
       "return": true
     },
     {
       "name": "line_count",
       "title": "Line count",
-      "command": "echo \"$SHELLAC_INFO_SELECTIONTEXT\" | wc -l",
+      "command": "wc -l",
       "contexts": ["selection"],
+      "stdin": [ "SHELLAC_INFO_SELECTIONTEXT" ],
       "return": true
     },
     {
