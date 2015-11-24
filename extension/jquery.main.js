@@ -1,10 +1,10 @@
-﻿; (function($) {
+; (function($) {
 
 var extension_name = "Shellac";
 var base_url = "http://127.0.0.1:8783";
 var actions = {};
 var parent_menu;
-var DEBUG = 0;   // set to '1' to see console logging
+var DEBUG = 1;   // set to '1' to see console logging
 var logger = function() { if (DEBUG) console.log.apply(console,arguments); };
 
 
@@ -136,9 +136,37 @@ function context_onclick( info, tab )
   var data = { action: action.name };
   $.each( info, function(k,v) { data["info."+k] = v; } );
   $.each( tab, function(k,v) { data["tab."+k] = v; } );
-  ajax('/action/', data, { type:'POST' });
+  get_multiline_selection(data, function(data) { ajax('/action/', data, { type:'POST' }); } );
 }
 
+function get_multiline_selection(data, ajax_func)
+{
+  // Note that chrome*:// pages aren't allowed to be accessed by the tabs context JS
+  // so we should just skip them all. Only consider pages that we already have a URL as well.
+  if ("info.pageUrl" in data)
+  {
+    if (!(data["info.pageUrl"].substring(0, 6) === "chrome"))
+    {
+      // This returns the selection WITH NEWLINES, which the info.selectionText does not contain.
+      // Newlines are critical for things like fauthful PGP signing, and PGP verification.
+      chrome.tabs.executeScript(null,
+        { "code": "window.getSelection().toString()" },
+        function(selection) {
+          var lines = selection[0].split("\n");
+          // For each line in the array, URI encode it, then JSON-encode the array, and base64 encode
+          // the JSON output. This should safely send multiline unicode across the barrier and safely
+          // store it in the environment
+          lines = lines.map(function(e, i, a) {
+            // See: https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/btoa
+            return encodeURIComponent(e);
+          });
+          data["info.selectionText"] = window.btoa(JSON.stringify(lines));
+          ajax_func(data);
+        }
+      );
+    }
+  }
+}
 
 function ajax( uri, data, opts )
 {
@@ -165,7 +193,7 @@ function ajax( uri, data, opts )
   {
     return_opt = {
       complete: function(xhr,status) {
-        if (!(xhr.responseText === "")) {alert(xhr.responseText); }
+        if (!(xhr.responseText === "")) {alert(decodeURIComponent(xhr.responseText)); }
       }
     };
   }
@@ -175,4 +203,3 @@ function ajax( uri, data, opts )
 
 
 })(jQuery);
-

@@ -8,6 +8,8 @@ import urlparse
 import shutil
 import cgi
 import BaseHTTPServer
+import urllib
+import base64
 
 try:
   import simplejson as json
@@ -95,14 +97,41 @@ class HttpHandler( BaseHTTPServer.BaseHTTPRequestHandler ):
       key = key.replace(".","_").upper()
       key = "SHELLAC_%s" % key
       key = key.encode('utf8','ignore')
-      value = value.encode('utf8','ignore')
-      os.environ[key] = value
-    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+      # The selection is handled separately, so decode that from b64, then URI
+      # decode it again.
+      if key == "SHELLAC_INFO_SELECTIONTEXT":
+        print "BEFORE\n" + value
+        value = base64.b64decode(value)
+        value = json.loads(value)
+        value = map((lambda v: urllib.unquote(v)), value)
+        value = "\n".join(value)
+        print "AFTER\n" + value
+      else:
+        value = value.encode('utf8','ignore')
+
+      os.environ[key] = value.encode("utf-8", "ignore")
+
+    # For each variable listed in the 'stdin' config param, take their values
+    # and concatenate them in order to be fed into the stdin of the process.
+    if 'stdin' in action_config:
+      stdin_text = ""
+      for v in action_config['stdin']:
+        stdin_text += os.environ[v]
+
+      print "STDIN: " + stdin_text
+      p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      p.stdin.write(input=stdin_text)
+      p.stdin.close()
+    else:
+      p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
     p.wait()
     out, err = p.communicate()
 
     self.send_response(200)
     if len(out) > 0 and 'return' in action_config and action_config['return'] == True:
+      out = urllib.quote(out.encode("utf-8", "ignore"))
       self.send_header('Content-Type', 'text/html')
       self.send_header("Content-Length", len(out))
       self.end_headers()
