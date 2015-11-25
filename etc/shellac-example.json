@@ -87,6 +87,13 @@
       "return": true
     },
     {
+      "name": "reactiongif",
+      "title": "IFL ReactionGIF",
+      "command": "wget -qO- \"http://www.reactiongifs.com/?s=$SHELLAC_INFO_SELECTIONTEXT&submit=Search\" | grep -o 'src=.*\\.gif' | sort -R | head -n1 | sed 's/^src=.//' | tee /dev/stderr | clip",
+      "contexts": [ "selection" ],
+      "return": true
+    },
+    {
       "name": "env",
       "title": "Debugging: dump environment",
       "command": "scripts/dump_env",
